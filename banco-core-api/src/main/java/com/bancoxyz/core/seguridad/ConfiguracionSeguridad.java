@@ -117,6 +117,8 @@ public class ConfiguracionSeguridad {
                         .requestMatchers(HttpMethod.POST, "/api/v1/autenticacion/tarjetas").hasRole(cajero)
                         .requestMatchers(HttpMethod.POST, "/api/v1/cuentas/*/retiros").hasRole(cajero)
                         .requestMatchers(HttpMethod.POST, "/api/v1/autenticacion/usuarios").hasAnyRole(web, movil, autenticacion)
+                        // Identificar sin clave (inicio de sesion con GitHub en banco-auth): solo el canal AUTENTICACION.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/autenticacion/usuarios/*").hasRole(autenticacion)
                         .requestMatchers(HttpMethod.GET, "/api/v1/clientes", "/api/v1/reportes/**").hasRole(web)
                         .requestMatchers(HttpMethod.GET, "/api/v1/clientes/*/cuentas", "/api/v1/cuentas/*/movimientos",
                                 "/api/v1/cuentas/*/estados-anuales").hasAnyRole(web, movil)

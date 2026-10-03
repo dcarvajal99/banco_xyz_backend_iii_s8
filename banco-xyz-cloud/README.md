@@ -138,7 +138,7 @@ Cada servicio recibe, en este orden de prioridad, los archivos de su nombre y pe
 | `application-nube.properties` | Todos, con el perfil `nube` | Direcciones dentro de la red del compose (Eureka `eureka-1`/`eureka-2`, Kafka `kafka:9092`, emisor, JWK Set y tokens de `banco-auth:8081`), `management.server.address=0.0.0.0` y los ajustes de Resilience4j para contenedores |
 | `banco-core-api.properties` | Core | Identidad e instancia `kafka` de Resilience4j (`base-config=publicacion-kafka`) |
 | `banco-core-api-nube.properties` | Core, perfil `nube` | `spring.datasource.url=jdbc:postgresql://db:5432/banco_xyz` |
-| `banco-auth.properties` | banco-auth | Duración del token (5 min), el core por nombre (`https://banco-core-api/api/v1`) y la instancia `core` (circuito, reintento y bulkhead con `base-config=http-interno`) |
+| `banco-auth.properties` | banco-auth | Duración del token (5 min), el core por nombre (`https://banco-core-api/api/v1`), la instancia `core` (circuito, reintento y bulkhead con `base-config=http-interno`) y el **cliente OAuth2 de GitHub** (`client-id` desde `BANCO_GITHUB_CLIENT_ID`, scopes, `redirect-uri`) con los vínculos cuenta de GitHub → cliente. El `client-secret` no está aquí: llega a banco-auth por variable de entorno |
 | `transferencias-service.properties` | transferencias-service | El core por nombre, la instancia `core` (`http-interno`) y la instancia `kafka` (`publicacion-kafka`) |
 | `transferencias-service-nube.properties` | transferencias-service, perfil `nube` | `spring.datasource.url=jdbc:postgresql://db:5432/banco_xyz` |
 | `antifraude-service.properties` | antifraude-service | Reglas de riesgo: monto máximo 5000, cuentas en observación (104), demora simulada 200 ms |
@@ -250,6 +250,7 @@ descarga la primera vez. Las herramientas de consola de Kafka también corren en
 | 12 | `escalabilidad.sh` | 48 transferencias con 1 y con 3 contenedores de antifraude (`--scale`), el reparto por partición y un contenedor muerto con `SIGKILL` a mitad de la carga. Usa `colima ssh` para matar el proceso |
 | 13 | `config_segura.sh` | HTTP plano rechazado, sin certificado se corta el handshake, sin clave 401, CA ajena rechazada, y un servicio con la clave de Config equivocada que no arranca (`fail-fast`) |
 | 14 | `eureka_peers.sh` | Réplicas disponibles, registro igual en los dos nodos, un contenedor nuevo replicado, y la caída y vuelta de `eureka-1` sin cortar el descubrimiento |
+| 17 | `oauth2_github.sh` | "Ingresar con GitHub": el registro en el Config Server (sin secreto), el botón del login, la redirección a GitHub con `client_id`, scopes, `redirect_uri` y `state`, que GitHub reconoce la aplicación, el rechazo de un `state` desconocido y la vinculación confirmada por el core. Con `iniciar` y `canjear '<url>'` se completa el inicio de sesión real con una cuenta de GitHub en el navegador |
 | 15 | `verificar_coherencia.sh` | Sobre del evento, lector versionado, nombres de tópicos y datos de JWT iguales entre proyectos; copias de las políticas de pruebas iguales a las centrales; ninguna ruta hacia otra carpeta |
 | — | `probar_todo.sh` | `./mvnw verify` en los seis proyectos, cada uno con su propio Maven Wrapper, con el log en `evidencias/logs/verify-proyectos.log` (`MVN_OPCIONES="-o"` para trabajar sin red) |
 | — | `generar_certificados.sh` | Genera la PKI de desarrollo; lo usa la imagen `pki` y se puede ejecutar a mano para otro directorio |
@@ -265,11 +266,11 @@ runtime de Docker.
 bash scripts/probar_todo.sh                # los seis proyectos, cada uno por separado
 ```
 
-12 pruebas propias: **10 del Config Server** y **2 de Eureka**.
+13 pruebas propias: **11 del Config Server** y **2 de Eureka**.
 
 | Clase | Pruebas | Qué comprueba |
 |---|---|---|
-| `ConfiguracionCentralTest` (config-server) | 10 (5 + 5 casos) | Levanta el Config Server sobre `configuracion/` real: sin credenciales (o con clave equivocada) responde 401; transferencias-service recibe su archivo y el común, con el core por nombre, Eureka, Kafka y los datos de JWT; las políticas de Resilience4j cambian entre el perfil por defecto y `nube` (circuito más holgado, llamadas lentas, backoff exponencial, base `db`); banco-auth y transferencias-service comparten `http-interno` y cada uno ignora su propia excepción de negocio; antifraude-service recibe sus reglas; ningún servicio recibe claves ni secretos (un caso por servicio) |
+| `ConfiguracionCentralTest` (config-server) | 11 (6 + 5 casos) | Levanta el Config Server sobre `configuracion/` real: sin credenciales (o con clave equivocada) responde 401; transferencias-service recibe su archivo y el común, con el core por nombre, Eureka, Kafka y los datos de JWT; las políticas de Resilience4j cambian entre el perfil por defecto y `nube` (circuito más holgado, llamadas lentas, backoff exponencial, base `db`); banco-auth y transferencias-service comparten `http-interno` y cada uno ignora su propia excepción de negocio; antifraude-service recibe sus reglas; banco-auth recibe el registro OAuth2 de GitHub con el `client-id` como marcador de variable y sin `client-secret`; ningún servicio recibe claves ni secretos (un caso por servicio) |
 | `ReplicacionEntrePeersTest` (eureka-server) | 1 | Levanta dos nodos con puertos libres, registra una instancia en uno y la encuentra `UP` en el otro |
 | `CatalogoTest` (eureka-server) | 1 | Registra una instancia HTTPS y la encuentra `UP` en la consulta siguiente |
 

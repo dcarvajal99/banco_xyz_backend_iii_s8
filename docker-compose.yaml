@@ -179,6 +179,10 @@ services:
       BANCO_OAUTH_BANCA_WEB_SECRETO: ${BANCO_OAUTH_BANCA_WEB_SECRETO:-banca-web-secreto-dev}
       BANCO_OAUTH_TRANSFERENCIAS_SECRETO: ${BANCO_OAUTH_TRANSFERENCIAS_SECRETO:-transferencias-oauth-dev}
       BANCO_OAUTH_OPERACION_SECRETO: ${BANCO_OAUTH_OPERACION_SECRETO:-operacion-secreto-dev}
+      # Inicio de sesion con GitHub: client-id (el Config Server lo usa en el registro) y secreto, que va directo a la
+      # propiedad del cliente OAuth sin pasar por el Config Server. Sin .env, GitHub queda sin configurar (solo formulario).
+      BANCO_GITHUB_CLIENT_ID: ${BANCO_GITHUB_CLIENT_ID:-sin-configurar}
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_SECRET: ${BANCO_GITHUB_CLIENT_SECRET:-sin-configurar}
     depends_on:
       config-server: *listo
       eureka-1: *listo

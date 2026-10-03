@@ -114,6 +114,7 @@ con el perfil `nube`. El core no hace llamadas HTTP salientes: no usa las polít
 | Método | Ruta | Credencial aceptada |
 |---|---|---|
 | POST | `/api/v1/autenticacion/usuarios` | Canal web o móvil (Basic + mTLS, semanas anteriores) y **banco-auth** (Basic + mTLS) |
+| GET | `/api/v1/autenticacion/usuarios/{usuario}` | Solo **banco-auth** (canal AUTENTICACION, Basic + mTLS). Identifica sin clave al cliente cuya cuenta de GitHub está vinculada (la persona ya se autenticó con GitHub): 200 con el contrato `usuario-autenticado.json`, 404 `USUARIO_NO_ENCONTRADO`, 423 bloqueado, 403 ejecutivo. No toca el contador de intentos |
 | POST | `/api/v1/autenticacion/tarjetas` | Canal cajero |
 | GET | `/api/v1/clientes` | Canal web (solo usuario ejecutivo) |
 | GET | `/api/v1/clientes/{clienteId}/cuentas` | Canal web o móvil |
@@ -300,7 +301,7 @@ necesitan ninguna infraestructura.
 ./mvnw verify
 ```
 
-64 pruebas. Usan H2 en modo PostgreSQL, Flyway real, las tablas del batch con un cierre de ejemplo, una PKI de prueba
+65 pruebas. Usan H2 en modo PostgreSQL, Flyway real, las tablas del batch con un cierre de ejemplo, una PKI de prueba
 (`PkiDePrueba`) y Kafka embebido solo en `SagaEnKafkaTest`; el broker se simula en `PublicadorDeOutboxTest`. El informe
 de cobertura JaCoCo queda en `target/site/jacoco/index.html`.
 
@@ -310,7 +311,7 @@ de cobertura JaCoCo queda en `target/site/jacoco/index.html`.
 |---|---|---|
 | `AutenticacionTest` | 4 | Intentos concurrentes de clave y PIN erróneos: el contador de fallos no pierde carreras y bloquea al llegar al límite; un bloqueo vencido se libera antes de evaluar la clave; traducción HTTP de credenciales inválidas, usuario inexistente, ejecutivo por móvil, tarjeta inválida y bloqueada |
 | `AutorizacionPorCanalTest` | 5 | La matriz completa de qué canal y qué credencial puede tocar cada recurso, incluyendo mTLS; segunda capa por usuario; cajero y su tarjeta |
-| `CanalesDeLaSemana7Test` | 4 | banco-auth autentica a un cliente, rechaza al ejecutivo y no puede leer cuentas; transferencias-service con su token OAuth lee la cuenta propia (200), una ajena da 404 y no puede retirar; la antigua clave Basic de transferencias-service da 401; un token sin `core.cuentas.leer` (403) o con el certificado de otro servicio (403) no pasa |
+| `CanalesDeLaSemana7Test` | 5 | banco-auth autentica a un cliente, rechaza al ejecutivo y no puede leer cuentas; banco-auth identifica sin clave a un cliente que entró con GitHub (200), y responde 404, 403 o 423 a un usuario inexistente, al ejecutivo o a uno bloqueado; ni la banca web ni transferencias-service pueden identificar sin clave (403); transferencias-service con su token OAuth lee la cuenta propia (200), una ajena da 404 y no puede retirar; la antigua clave Basic de transferencias-service da 401; un token sin `core.cuentas.leer` (403) o con el certificado de otro servicio (403) no pasa |
 | `CierresYSincronizacionTest` | 5 | La sincronización al arrancar publica solo la ejecución `COMPLETED` correcta, con la fila canónica de cada cuenta; no duplica ni pisa saldos; tarjeta Luhn con solo su HMAC; cierres vigentes y calidad; movimientos |
 | `ContratoCoreApiTest` | 4 | Cada respuesta real del core cumple exactamente las claves de su archivo en `contratos/core-api` |
 | `ErroresTecnicosTest` | 2 | Traducción de fallas técnicas: bloqueo no obtenido a `503`, violación de unicidad a `409`, error inesperado a `500` sin detalles; errores de Spring MVC con código |

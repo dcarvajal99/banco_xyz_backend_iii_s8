@@ -53,6 +53,12 @@ public final class Errores {
                 "La cuenta no existe o no pertenece al usuario");
     }
 
+    /** Inexistente o inactivo responden igual: no se revela que usuarios existen. */
+    public static ErrorDeNegocio usuarioNoEncontrado() {
+        return new ErrorDeNegocio(HttpStatus.NOT_FOUND, "USUARIO_NO_ENCONTRADO", "Usuario no encontrado",
+                "El usuario no existe o no esta activo");
+    }
+
     public static ErrorDeNegocio clienteNoEncontrado() {
         return new ErrorDeNegocio(HttpStatus.NOT_FOUND, "CLIENTE_NO_ENCONTRADO", "Cliente no encontrado",
                 "El cliente no existe o no corresponde al usuario");

@@ -20,7 +20,8 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 /**
- * Llamada HTTP al core para verificar usuario y clave, protegida con Resilience4j por anotaciones.
+ * Llamadas HTTP al core para verificar usuario y clave (o identificar al cliente que entro con GitHub), protegidas
+ * con Resilience4j por anotaciones.
  *
  * <p>Orden de los aspectos: {@code Retry(CircuitBreaker(llamada))}. Un corte de conexion se reintenta una vez; si el core
  * sigue sin responder, el circuito {@code core} se abre y las llamadas siguientes van directo al fallback sin esperar
@@ -53,6 +54,20 @@ public class ClienteCore {
                 .body(UsuarioAutenticado.class);
     }
 
+    /**
+     * Identifica sin clave a un cliente cuya cuenta de GitHub esta vinculada a su usuario del banco (la persona ya se
+     * autentico con GitHub). El core confirma que existe, que esta activo y sin bloqueo, y devuelve sus ids. Mismo
+     * canal AUTENTICACION y misma proteccion que {@link #autenticar}.
+     */
+    @Bulkhead(name = "core")
+    @CircuitBreaker(name = "core")
+    @Retry(name = "core", fallbackMethod = "coreNoDisponibleAlIdentificar")
+    public UsuarioAutenticado identificar(String usuario) {
+        return http.get().uri("/autenticacion/usuarios/{usuario}", usuario)
+                .retrieve()
+                .body(UsuarioAutenticado.class);
+    }
+
     // Fallbacks por tipo: solo las fallas de disponibilidad terminan aqui. Un ErrorDeNegocioDelCore no calza con
     // ninguno y llega tal cual al controlador.
     UsuarioAutenticado coreNoDisponible(String usuario, String clave, ResourceAccessException sinConexion) {
@@ -74,6 +89,26 @@ public class ClienteCore {
 
     /** LoadBalancer sin instancias: el core se dio de baja en Eureka (por ejemplo, al detenerse ordenadamente). */
     UsuarioAutenticado coreNoDisponible(String usuario, String clave, IllegalStateException sinInstancias) {
+        throw new CoreNoDisponible(sinInstancias);
+    }
+
+    UsuarioAutenticado coreNoDisponibleAlIdentificar(String usuario, ResourceAccessException sinConexion) {
+        throw new CoreNoDisponible(sinConexion);
+    }
+
+    UsuarioAutenticado coreNoDisponibleAlIdentificar(String usuario, HttpServerErrorException error5xx) {
+        throw new CoreNoDisponible(error5xx);
+    }
+
+    UsuarioAutenticado coreNoDisponibleAlIdentificar(String usuario, CallNotPermittedException circuitoAbierto) {
+        throw new CoreNoDisponible(circuitoAbierto);
+    }
+
+    UsuarioAutenticado coreNoDisponibleAlIdentificar(String usuario, BulkheadFullException lleno) {
+        throw new CoreNoDisponible(lleno);
+    }
+
+    UsuarioAutenticado coreNoDisponibleAlIdentificar(String usuario, IllegalStateException sinInstancias) {
         throw new CoreNoDisponible(sinInstancias);
     }
 

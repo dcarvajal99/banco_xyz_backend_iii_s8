@@ -36,7 +36,9 @@ Los publica Spring Authorization Server; `ServidorDeAutorizacion` declara las do
 | POST | `/oauth2/revoke` | Clientes registrados | Revocación de un token (RFC 7009). Mismo caso que el anterior |
 | GET | `/.well-known/openid-configuration` | Clientes OIDC | Metadatos: emisor, endpoints, `S256` como método PKCE, grant types |
 | GET | `/userinfo` | Aplicación cliente | Datos del usuario, con el access token como `Bearer` |
-| GET, POST | `/login` | Navegador del usuario | Formulario de inicio de sesión (con token CSRF) y su envío |
+| GET, POST | `/login` | Navegador del usuario | Formulario de inicio de sesión (con token CSRF) y su envío; ofrece también "Ingresar con GitHub" |
+| GET | `/oauth2/authorization/github` | Navegador del usuario | "Ingresar con GitHub": redirige a `github.com/login/oauth/authorize` con el `client_id`, los scopes, el `redirect_uri` y un `state` |
+| GET | `/login/oauth2/code/github` | GitHub (redirección del navegador) | Vuelta desde GitHub con el código: banco-auth lo canjea en GitHub, lee `/user` y aplica la vinculación |
 
 Operación, en el puerto `9081`:
 
@@ -107,6 +109,40 @@ guardan con bcrypt (`DelegatingPasswordEncoder`).
 Sin `code_challenge` no se entrega código (`invalid_request`); un código sin `code_verifier` o con uno incorrecto no se
 canjea (`invalid_grant`).
 
+## Inicio de sesión con GitHub (identidad federada)
+
+La guía de la semana enlaza el [tutorial de Spring](https://spring.io/guides/tutorials/spring-boot-oauth2) para integrar
+OAuth 2.0 con la identidad de GitHub y el [ejemplo del curso](https://github.com/KariVillagran/spring-security-oauth2).
+banco-auth aplica ese esquema sin dejar de ser el servidor de autorización del banco: es **cliente OAuth 2.0 de GitHub**
+(`spring-boot-starter-oauth2-client`, `oauth2Login()` en `cadenaDeLogin`), y GitHub es un proveedor de identidad más.
+
+1. La persona elige "Ingresar con GitHub" en `/login`; banco-auth la envía a GitHub (`authorization_code` con `state`).
+2. GitHub la autentica, le pide autorizar la aplicación y la devuelve a `/login/oauth2/code/github` con un código.
+3. banco-auth canjea el código en GitHub y lee el perfil (`/user`) con ese token de GitHub.
+4. `VinculacionGitHub` (un `OAuth2UserService`, como el del ejemplo del curso que solo acepta miembros de una
+   organización) aplica la regla del banco: busca el **id numérico** de la cuenta en
+   `banco.auth.github.vinculos` y pide al core que confirme a ese cliente
+   (`GET /autenticacion/usuarios/{usuario}`, canal AUTENTICACION, mTLS, Resilience4j). No se vincula por login porque un
+   login de GitHub se puede cambiar y otra persona podría tomar el nombre liberado.
+5. La sesión queda con un `UsuarioGitHub` cuyo nombre es el usuario del banco. El flujo `authorization_code` del banco
+   sigue igual y los tokens llevan los ids del core, `origen=github` y `github_login`.
+
+| Caso | Resultado |
+|---|---|
+| Cuenta vinculada y cliente activo | Sesión iniciada; `sub` = usuario del banco |
+| Cuenta sin vínculo | `/login?error=github-no-vinculado`, sin consultar al core |
+| Vinculada a un usuario bloqueado (423) o que no puede usar la banca en línea (403) | `/login?error=bloqueado` o `no-habilitado` |
+| Core caído | `/login?error=servicio` |
+| GitHub rechaza (la persona no autoriza la aplicación, `state` que no calza) | `/login?error=github` |
+
+**Configuración.** Como en la clase, el registro del cliente GitHub vive en el Config Server
+(`configuracion/banco-auth.properties`): `client-id` (`${BANCO_GITHUB_CLIENT_ID:sin-configurar}`), scopes
+`read:user,user:email`, `redirect-uri` `{baseUrl}/login/oauth2/code/{registrationId}` y los vínculos. El `client-secret`
+**no** pasa por el Config Server: el compose lo entrega a banco-auth en
+`SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_SECRET` desde `BANCO_GITHUB_CLIENT_SECRET` del `.env`. Con el
+`client-id` en `sin-configurar`, el login no muestra el botón. La aplicación OAuth se registra en GitHub con
+**Authorization callback URL** `https://localhost:8081/login/oauth2/code/github` (ver el README general, §5.4).
+
 ## Claims del token
 
 `claimsDelBanco` (un `OAuth2TokenCustomizer<JwtEncodingContext>`) agrega lo que el resto del banco necesita para
@@ -120,6 +156,7 @@ autorizar, no solo para identificar:
 | Access token | `sub` | Usuario (en `authorization_code`) o id del cliente (en `client_credentials`) |
 | Access token | `scope` | Lista de scopes concedidos |
 | Access token e ID token | `usuario_id`, `cliente_id`, `rol` | Datos del usuario en el core, solo cuando hay usuario: transferir solo desde cuentas propias, ver solo los avisos propios. Un token de `client_credentials` no los trae |
+| Access token e ID token | `origen`, `github_login` | Cómo inició sesión: `banco` (formulario) o `github`, con el login de GitHub |
 | Access token | `iat`, `exp`, `jti` | Los agrega Spring Authorization Server; `exp` = `iat` + `banco.auth.duracion-token` |
 
 ## Inicio de sesión contra el core
@@ -222,6 +259,7 @@ Variables que el servicio recibe del `docker-compose.yaml` de la raíz (los valo
 | `EUREKA_INSTANCE_HOSTNAME=banco-auth` | Nombre con que se registra en Eureka |
 | `BANCO_CANAL_AUTENTICACION_CLAVE` | Clave Basic del canal `AUTENTICACION` ante el core |
 | `BANCO_OAUTH_BANCA_WEB_SECRETO`, `BANCO_OAUTH_TRANSFERENCIAS_SECRETO`, `BANCO_OAUTH_OPERACION_SECRETO` | Secretos de los tres clientes OAuth |
+| `BANCO_GITHUB_CLIENT_ID`, `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_SECRET` | Aplicación OAuth registrada en GitHub (`.env`: `BANCO_GITHUB_CLIENT_ID` y `BANCO_GITHUB_CLIENT_SECRET`) |
 
 Depende (por salud) de `config-server`, `eureka-1` y `banco-core-api`, y publica `127.0.0.1:8081` y `127.0.0.1:9081`.
 
@@ -273,7 +311,7 @@ necesita al core. Las pruebas no necesitan ninguna infraestructura.
 ./mvnw verify
 ```
 
-26 pruebas. El informe de cobertura JaCoCo queda en `target/site/jacoco/index.html`.
+33 pruebas. El informe de cobertura JaCoCo queda en `target/site/jacoco/index.html`.
 
 ## Pruebas
 
@@ -285,6 +323,7 @@ Corren con el perfil `prueba` (sin Config Server ni Eureka) y simulan el core co
 | `FlujosOAuthTest` | 8 | Discovery OpenID (emisor, endpoints, `S256`); `authorization_code` + PKCE de punta a punta (access token RS256 con `kid` de la clave activa, verificado con el JWK Set, claims del usuario, `aud=banco-xyz`, scopes); PKCE obligatorio (sin `code_challenge` no hay código, sin `code_verifier` no se canjea); banca-web no puede pedir `core.cuentas.leer`; refresh token rotativo (el usado da `invalid_grant`); `client_credentials` sin datos de usuario ni refresh token; secreto incorrecto (401) y scope no permitido (400); al rotar, el token nuevo lleva el `kid` nuevo y `/oauth2/jwks` publica las dos claves sin parte privada |
 | `LoginContraElCoreTest` | 5 (2 + 3 casos) | Sin sesión, `/oauth2/authorize` lleva a `/login`; clave correcta: el core la valida y la sesión queda con el usuario y sus ids; el core rechaza con 401, 403 o 423 y el login muestra `credenciales`, `no-habilitado` o `bloqueado` |
 | `CircuitoDelCoreTest` | 5 | Core caído: el primer login reintenta una vez y a la tercera falla el circuito abre (el siguiente no llama al core); el formulario dice que el servicio no está disponible, no «clave incorrecta»; cinco claves incorrectas no abren el circuito; core sin instancias en Eureka (`IllegalStateException`) da `servicio` sin reintento; bulkhead lleno da `servicio` sin llamar al core ni contar como falla |
+| `LoginConGitHubTest` | 7 | El login ofrece "Ingresar con GitHub" y explica el rechazo de una cuenta sin vincular; `/oauth2/authorization/github` redirige a GitHub con `client_id`, scopes, `redirect_uri` y `state`; cuenta vinculada: el core confirma al cliente y la sesión queda con sus ids; sin vínculo: `cuenta_no_vinculada` sin llamar al core; vinculada a un usuario bloqueado: `usuario_bloqueado`; un `state` desconocido vuelve al login con error; con la sesión de GitHub el access token lleva los ids del banco, `origen=github` y `github_login`. GitHub se simula: las pruebas no salen a internet |
 | `OperacionProtegidaTest` | 5 | Sin token no se listan, rotan ni retiran claves (401) y la salud sigue abierta; un token válido de otro cliente da 403; `operacion-banco` lista, rota y retira; nadie puede forzar el estado de un circuito por el actuator (401 sin token, 403 con token); ningún otro cliente puede pedir `claves.administrar` |
 | `RotacionDeClavesTest` | 3 | Al rotar cambia la activa y el JWK Set publica las dos (el conjunto de firma trae las privadas); la anterior se retira sola al vencer su gracia; el retiro manual saca la anterior de inmediato y falla sobre la activa |
 

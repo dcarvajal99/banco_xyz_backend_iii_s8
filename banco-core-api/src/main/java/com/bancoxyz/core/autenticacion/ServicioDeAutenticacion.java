@@ -36,6 +36,11 @@ public class ServicioDeAutenticacion {
     public record ResultadoUsuario(EstadoUsuario estado, Usuario usuario) {
     }
 
+    public enum EstadoIdentificacion { IDENTIFICADO, NO_ENCONTRADO, BLOQUEADO, ROL_NO_PERMITIDO }
+
+    public record ResultadoIdentificacion(EstadoIdentificacion estado, Usuario usuario) {
+    }
+
     public enum EstadoTarjeta { AUTENTICADA, TARJETA_INVALIDA, PIN_INCORRECTO, BLOQUEADA }
 
     public record ResultadoTarjeta(EstadoTarjeta estado, Tarjeta tarjeta, int intentosRestantes) {
@@ -79,6 +84,28 @@ public class ServicioDeAutenticacion {
             return new ResultadoUsuario(EstadoUsuario.ROL_NO_PERMITIDO, usuario);
         }
         return new ResultadoUsuario(EstadoUsuario.AUTENTICADO, usuario);
+    }
+
+    /**
+     * Identifica a un usuario por su nombre, sin clave. Lo usa banco-auth cuando la persona ya se autentico con un
+     * proveedor de identidad externo (GitHub) cuya cuenta esta vinculada a este usuario: el core confirma que existe,
+     * que esta activo y sin bloqueo, y que es un cliente. Solo el canal AUTENTICACION llega aqui (mTLS + clave de canal).
+     * No toca el contador de intentos: no hay clave que probar.
+     */
+    @Transactional(readOnly = true)
+    public ResultadoIdentificacion identificarUsuario(String nombreUsuario) {
+        Optional<Usuario> encontrado = usuarios.findByUsuario(nombreUsuario);
+        if (encontrado.isEmpty() || !encontrado.get().isActivo()) {
+            return new ResultadoIdentificacion(EstadoIdentificacion.NO_ENCONTRADO, null);
+        }
+        Usuario usuario = encontrado.get();
+        if (usuario.bloqueadoEn(LocalDateTime.now(reloj))) {
+            return new ResultadoIdentificacion(EstadoIdentificacion.BLOQUEADO, usuario);
+        }
+        if (usuario.esEjecutivo()) {
+            return new ResultadoIdentificacion(EstadoIdentificacion.ROL_NO_PERMITIDO, usuario);
+        }
+        return new ResultadoIdentificacion(EstadoIdentificacion.IDENTIFICADO, usuario);
     }
 
     @Transactional

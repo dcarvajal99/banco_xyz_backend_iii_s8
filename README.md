@@ -5,7 +5,8 @@ Resilience4j y la saga de transferencias sobre Kafka) queda listo para un entorn
 
 - **OAuth 2.0.** banco-auth es ahora un servidor de autorización estándar (**Spring Authorization Server**): los
   usuarios entran con **authorization_code + PKCE** y los servicios entre sí con **client_credentials**. Cada servicio es
-  un servidor de recursos que exige un *scope* por operación.
+  un servidor de recursos que exige un *scope* por operación. Además, **"Ingresar con GitHub"**: banco-auth es cliente
+  OAuth 2.0 de GitHub (identidad federada, como el tutorial que enlaza la guía), con el registro en el Config Server.
 - **Docker.** Cada microservicio tiene su **Dockerfile multi-etapa** (compila con Maven, corre en un JRE 21 sin
   privilegios y con *healthcheck*).
 - **docker-compose.yaml.** Un solo archivo levanta los **once contenedores** en orden por salud, en una red propia, con
@@ -38,7 +39,7 @@ ni código compartido.
 
 | Criterio de la pauta | Cómo se cumple | Evidencia en ejecución |
 |---|---|---|
-| 1. OAuth 2.0 con flujo funcional que protege datos y servicios | Spring Authorization Server: authorization_code + PKCE obligatorio, refresh token rotativo, client_credentials entre servicios, OIDC; scopes por operación en cada servidor de recursos; firma RS256 con JWK Set y rotación protegida por su propio scope; actuator de solo lectura | `oauth2_flujos.sh` · `proteccion_servicios.sh` · `claves_jwt.sh` |
+| 1. OAuth 2.0 con flujo funcional que protege datos y servicios | Spring Authorization Server: authorization_code + PKCE obligatorio, refresh token rotativo, client_credentials entre servicios, OIDC; scopes por operación en cada servidor de recursos; firma RS256 con JWK Set y rotación protegida por su propio scope; actuator de solo lectura; **"Ingresar con GitHub"** (identidad federada, registro en el Config Server) | `oauth2_flujos.sh` · `proteccion_servicios.sh` · `claves_jwt.sh` · `oauth2_github.sh` |
 | 2. Imágenes Docker funcionales para todos los microservicios | Un Dockerfile multi-etapa por servicio (Maven → JRE 21 alpine), capas de Spring Boot, usuario sin privilegios, *healthcheck*; imágenes propias para la PKI y la base | `imagenes_docker.sh` |
 | 3. docker-compose.yaml que orquesta todos los componentes | 11 contenedores, `depends_on` por salud, red `banco-xyz`, volúmenes con nombre, puertos solo en 127.0.0.1, límites de memoria, `restart: unless-stopped`, secretos por `.env` | `ecosistema_compose.sh` |
 | 4. Tolerancia a fallos con Resilience4j | `@Bulkhead` + `@CircuitBreaker` + `@Retry` con fallback en las llamadas HTTP al core; decoradores en la publicación a Kafka; **políticas compartidas en el Config Server, por entorno** | `resiliencia_core.sh` · `resiliencia_kafka.sh` · `politicas_por_entorno.sh` |
@@ -46,7 +47,7 @@ ni código compartido.
 | 6. Código, documentación y evidencia | Este repositorio, un README por proyecto y un script de evidencia por criterio | §6 y §7 |
 
 <!-- RESULTADOS -->
-Pruebas automatizadas: **159, 0 fallas** en los seis proyectos (§7). Evidencias de ejecución: **15 scripts con 223 verificaciones y 0 fallas** (§6), capturadas desde un estado limpio (`docker compose down -v`: base, Kafka y PKI nuevas). El ecosistema completo queda sano en 80 s; 48 transferencias tardan 10,66 s con un contenedor de antifraude y 4,63 s con tres (2,3×).
+Pruebas automatizadas: **168, 0 fallas** en los seis proyectos (§7). Evidencias de ejecución: **17 salidas de scripts con 238 verificaciones y 0 fallas** (§6), capturadas desde un estado limpio (`docker compose down -v`: base, Kafka y PKI nuevas), salvo el inicio de sesión real con GitHub, que se hace en el navegador con el ecosistema arriba. El ecosistema completo queda sano en 65 s; 48 transferencias tardan 12,17 s con un contenedor de antifraude y 5,10 s con tres (2,4×).
 <!-- /RESULTADOS -->
 
 ### 0.1 Respuesta a la retroalimentación
@@ -118,6 +119,18 @@ aplicación a manejar la clave del usuario. Ahora banco-auth es un **servidor de
 - **Del lado del cliente:** transferencias-service obtiene y renueva su token con `spring-boot-starter-oauth2-client`
   (`OAuth2ClientHttpRequestInterceptor` en su `RestClient`); si no consigue token, el fallback de Resilience4j acepta la
   transferencia con validación DIFERIDA.
+- **Identidad federada con GitHub:** el login de banco-auth ofrece "Ingresar con GitHub" (`oauth2Login()` con
+  `spring-boot-starter-oauth2-client`, como el [tutorial](https://spring.io/guides/tutorials/spring-boot-oauth2) y el
+  [ejemplo del curso](https://github.com/KariVillagran/spring-security-oauth2)). GitHub autentica a la persona y
+  banco-auth sigue emitiendo los tokens del banco:
+  - el registro del cliente GitHub (`client-id`, scopes `read:user` y `user:email`, `redirect-uri`) vive en el Config
+    Server (`configuracion/banco-auth.properties`); el `client-secret` **no** pasa por él: llega a banco-auth por variable
+    de entorno desde `.env`, que no se versiona;
+  - como el ejemplo del curso (que solo acepta miembros de una organización), `VinculacionGitHub` aplica la regla del
+    banco: solo entran cuentas de GitHub **vinculadas a un cliente**, por el id numérico de GitHub (el login se puede
+    cambiar). El core confirma que el cliente existe, está activo y no está bloqueado
+    (`GET /api/v1/autenticacion/usuarios/{usuario}`, solo canal AUTENTICACION);
+  - los tokens llevan los ids del cliente en el core, `origen=github` y `github_login`; los demás servicios no cambian.
 
 ### 2.2 Imágenes Docker
 
@@ -246,7 +259,7 @@ banco-xyz-nube/
 ├── banco-xyz-cloud/         config-server/ (Dockerfile) · eureka-server/ (Dockerfile) · configuracion/ · docker/pki · docker/db
 │                            datos/ (volcado de la migración) · scripts/ (evidencias) · evidencias/
 ├── banco-core-api/          Dockerfile · cuentas, saga, outbox · seguridad/ (servidor de recursos + mTLS)
-├── banco-auth/              Dockerfile · oauth/ (Authorization Server, clientes, login) · claves/ (rotación) · core/
+├── banco-auth/              Dockerfile · oauth/ (Authorization Server, clientes, login, GitHub) · claves/ (rotación) · core/
 ├── transferencias-service/  Dockerfile · transferencia/ · evento/ (LectorDeEventos) · outbox/ · core/ (TokenDeServicio)
 ├── antifraude-service/      Dockerfile · transferencia/ (reglas, consumidor, LectorDeEventos)
 └── notificaciones-service/  Dockerfile · notificacion/ · evento/ (LectorDeEventos)
@@ -291,7 +304,28 @@ iniciar sesión y copiar el `code` de la barra de direcciones (no hay aplicació
 del banco está en el volumen `certificados` (`docker compose cp pki:/certificados/ca/ca.crt .`). El emisor de los
 tokens es `https://banco-auth:8081`, el nombre del servicio en la red del compose.
 
-### 5.4 Credenciales de desarrollo
+### 5.4 Ingresar con GitHub
+
+1. En GitHub: *Settings → Developer settings → OAuth Apps → New OAuth App*, con **Homepage URL**
+   `https://localhost:8081` y **Authorization callback URL** `https://localhost:8081/login/oauth2/code/github`. Generar
+   un *client secret*.
+2. Crear `.env` en la raíz (a partir de `.env.ejemplo`) con `BANCO_GITHUB_CLIENT_ID` y `BANCO_GITHUB_CLIENT_SECRET`, y
+   vincular la cuenta en `banco-xyz-cloud/configuracion/banco-auth.properties`
+   (`banco.auth.github.vinculos.<id numérico de GitHub>=<usuario del banco>`; el id se ve con `gh api user --jq .id`).
+3. `docker compose up -d --build --wait` y luego:
+
+```bash
+banco-xyz-cloud/scripts/oauth2_github.sh                   # registro, botón, redirección a GitHub y vinculación
+banco-xyz-cloud/scripts/oauth2_github.sh iniciar           # imprime la URL para abrir en el navegador
+banco-xyz-cloud/scripts/oauth2_github.sh canjear '<url>'   # la URL de vuelta (http://127.0.0.1:8099/callback?code=...)
+```
+
+En el navegador: abrir la URL, aceptar el certificado de desarrollo de `https://localhost:8081` (o importar la CA del
+banco), elegir **Ingresar con GitHub**, iniciar sesión en GitHub y autorizar la aplicación. El navegador termina en
+`http://127.0.0.1:8099/callback?code=...` (no hay aplicación escuchando ahí): esa URL es la que se pasa a `canjear`.
+Sin `.env`, GitHub queda sin configurar y el login ofrece solo usuario y clave.
+
+### 5.5 Credenciales de desarrollo
 
 | Qué | Valor |
 |---|---|
@@ -299,6 +333,7 @@ tokens es `https://banco-auth:8081`, el nombre del servicio en la red del compos
 | Cliente OAuth `banca-web` | secreto `banca-web-secreto-dev` (`BANCO_OAUTH_BANCA_WEB_SECRETO`), `redirect_uri` `http://127.0.0.1:8099/callback` |
 | Cliente OAuth `transferencias-service` | secreto `transferencias-oauth-dev` (`BANCO_OAUTH_TRANSFERENCIAS_SECRETO`) |
 | Cliente OAuth `operacion-banco` | secreto `operacion-secreto-dev` (`BANCO_OAUTH_OPERACION_SECRETO`) |
+| Aplicación OAuth de GitHub | la registrada por cada desarrollador (`BANCO_GITHUB_CLIENT_ID`, `BANCO_GITHUB_CLIENT_SECRET` en `.env`; §5.4) |
 | Config Server | `configuracion` / `config-secreto-dev` + certificado de cliente |
 | Base | `banco` / `banco123`, base `banco_xyz` (solo dentro de la red) |
 
@@ -331,7 +366,9 @@ Salidas completas en `banco-xyz-cloud/evidencias/salidas/` (con colores ANSI) y 
 | 13 | `config_segura.sh` | S6 | 14, 0 fallas |
 | 14 | `eureka_peers.sh` | S6 | 10, 0 fallas |
 | 15 | `verificar_coherencia.sh` | S7 | 29, 0 fallas |
-| | **Total** | | **223, 0 fallas** |
+| 17 | `oauth2_github.sh` | 1 · guía (GitHub) | 9, 0 fallas |
+| 18 | `oauth2_github_sesion.sh` | 1 · guía (GitHub) | 6, 0 fallas |
+| | **Total** | | **238, 0 fallas** |
 <!-- /EVIDENCIAS -->
 
 ## 7. Pruebas
@@ -343,14 +380,14 @@ banco-xyz-cloud/scripts/probar_todo.sh     # ./mvnw verify en cada proyecto por 
 <!-- PRUEBAS -->
 | Proyecto / módulo | Pruebas | Cobertura de líneas | Lo nuevo de la semana |
 |---|---|---|---|
-| banco-xyz-cloud / config-server | 10 | 80,0 % | `ConfiguracionCentralTest`: políticas por entorno y compartidas |
+| banco-xyz-cloud / config-server | 11 | 80,0 % | `ConfiguracionCentralTest`: políticas por entorno y compartidas; registro de GitHub sin secreto |
 | banco-xyz-cloud / eureka-server | 2 | 33,3 % | `ReplicacionEntrePeersTest` con el transporte RestClient |
-| banco-core-api | 64 | 95,8 % | `CanalesDeLaSemana7Test` con token `client_credentials` + certificado; `LectorDeEventosTest`; moneda no soportada |
-| banco-auth | 26 | 95,3 % | `FlujosOAuthTest`, `LoginContraElCoreTest`, `OperacionProtegidaTest`, bulkhead en `CircuitoDelCoreTest` |
+| banco-core-api | 65 | 95,8 % | `CanalesDeLaSemana7Test` con token `client_credentials` + certificado e identificación para GitHub; `LectorDeEventosTest`; moneda no soportada |
+| banco-auth | 33 | 93,3 % | `FlujosOAuthTest`, `LoginContraElCoreTest`, `LoginConGitHubTest`, `OperacionProtegidaTest`, bulkhead en `CircuitoDelCoreTest` |
 | transferencias-service | 22 | 92,3 % | Token de servicio hacia el core, scopes por operación, bulkhead y actuator de solo lectura; `LectorDeEventosTest` |
 | antifraude-service | 15 | 86,4 % | `LectorDeEventosTest` (v1 → v2, versión futura a la DLT) |
 | notificaciones-service | 20 | 93,0 % | `LectorDeEventosTest`; scope `notificaciones.leer` |
-| **Total** | **159, 0 fallas** | | |
+| **Total** | **168, 0 fallas** | | |
 <!-- /PRUEBAS -->
 
 ## 8. Limitaciones conocidas
@@ -359,6 +396,8 @@ banco-xyz-cloud/scripts/probar_todo.sh     # ./mvnw verify en cada proyecto por 
   una base con `JdbcRegisteredClientRepository` y `JdbcOAuth2AuthorizationService`.
 - transferencias-service se autentica ante banco-auth con un secreto; el paso siguiente es `tls_client_auth` con su
   certificado.
+- Los vínculos entre cuentas de GitHub y clientes del banco viven en la configuración central; en producción irían en
+  una tabla del core, con un flujo en que el cliente vincula su cuenta después de entrar con su clave.
 - Kafka es un solo nodo (factor de replicación 1) y la PKI vive en un volumen compartido: adecuado para desarrollo; en
   la nube irían un clúster administrado y un gestor de secretos.
 - La demora de antifraude es simulada (200 ms) para que la escalabilidad sea medible en un equipo de desarrollo.

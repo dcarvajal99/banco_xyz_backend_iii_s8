@@ -6,6 +6,7 @@ import com.bancoxyz.auth.claves.AlmacenDeClaves;
 import com.bancoxyz.auth.config.PropiedadesAuth;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -15,6 +16,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
@@ -42,7 +44,8 @@ import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
  *       {@code /userinfo}). Si el navegador llega a {@code /oauth2/authorize} sin sesion, lo manda al login.</li>
  *   <li>El actuator (puerto de operacion): la administracion de claves exige un token con {@code claves.administrar};
  *       el resto es solo lectura.</li>
- *   <li>El formulario de login (la clave la verifica el core) y el resto, que exige sesion.</li>
+ *   <li>El inicio de sesion: el formulario (la clave la verifica el core) o "Ingresar con GitHub" (identidad federada,
+ *       solo cuentas vinculadas a un cliente; ver {@link VinculacionGitHub}), y el resto, que exige sesion.</li>
  * </ol>
  *
  * <p>Los tokens se firman con las claves rotables de {@link AlmacenDeClaves} (RS256): el encabezado lleva el {@code kid}
@@ -88,7 +91,15 @@ public class ServidorDeAutorizacion {
 
     @Bean
     @Order(3)
-    public SecurityFilterChain cadenaDeLogin(HttpSecurity http) throws Exception {
+    public SecurityFilterChain cadenaDeLogin(HttpSecurity http, ObjectProvider<ClientRegistrationRepository> registros,
+                                             VinculacionGitHub vinculacion) throws Exception {
+        // OAuth 2.0 Client con GitHub como proveedor de identidad (el registro llega del Config Server). Sin registro,
+        // queda solo el formulario.
+        if (registros.getIfAvailable() != null) {
+            http.oauth2Login(o -> o.loginPage("/login")
+                    .userInfoEndpoint(u -> u.userService(vinculacion))
+                    .failureHandler(new FallasDeLogin()));
+        }
         return http
                 .headers(h -> h.httpStrictTransportSecurity(hsts -> hsts.maxAgeInSeconds(31_536_000).includeSubDomains(true)))
                 .authorizeHttpRequests(a -> a
@@ -130,7 +141,8 @@ public class ServidorDeAutorizacion {
      * <ul>
      *   <li>Encabezado: el {@code kid} de la clave activa (con varias claves publicadas el firmador necesita saber cual usar).</li>
      *   <li>Access token: {@code aud=banco-xyz} y, si hay usuario, {@code usuario_id}, {@code cliente_id} y {@code rol};
-     *       un token de client_credentials no los trae (no hay usuario: {@code sub} es el id del cliente).</li>
+     *       un token de client_credentials no los trae (no hay usuario: {@code sub} es el id del cliente). {@code origen}
+     *       dice como inicio sesion: {@code banco} (formulario) o {@code github}, con su {@code github_login}.</li>
      *   <li>ID token (OpenID Connect): los mismos datos del usuario para la aplicacion.</li>
      * </ul>
      */
@@ -143,11 +155,18 @@ public class ServidorDeAutorizacion {
             if (accessToken) {
                 contexto.getClaims().audience(List.of(propiedades.audiencia()));
             }
-            if ((accessToken || idToken) && contexto.getPrincipal().getPrincipal() instanceof UsuarioDelBanco usuario) {
+            Object principal = contexto.getPrincipal().getPrincipal();
+            UsuarioDelBanco usuario = principal instanceof UsuarioGitHub github ? github.banco()
+                    : principal instanceof UsuarioDelBanco delBanco ? delBanco : null;
+            if ((accessToken || idToken) && usuario != null) {
                 contexto.getClaims()
                         .claim("usuario_id", usuario.usuarioId())
                         .claim("cliente_id", usuario.clienteId())
-                        .claim("rol", usuario.rol());
+                        .claim("rol", usuario.rol())
+                        .claim("origen", principal instanceof UsuarioGitHub ? "github" : "banco");
+                if (principal instanceof UsuarioGitHub github) {
+                    contexto.getClaims().claim("github_login", github.githubLogin());
+                }
             }
         };
     }

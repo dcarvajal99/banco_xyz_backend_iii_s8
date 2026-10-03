@@ -85,6 +85,18 @@ class ConfiguracionCentralTest {
     }
 
     @Test
+    @DisplayName("banco-auth recibe el registro OAuth2 de GitHub y sus vinculos; el client-id es un marcador y no hay client-secret")
+    void registroDeGitHub() {
+        String github = "spring.security.oauth2.client.registration.github.";
+        assertThat(propiedades(entorno("banco-auth", "nube")))
+                .containsEntry(github + "client-id", "${BANCO_GITHUB_CLIENT_ID:sin-configurar}")
+                .containsEntry(github + "scope", "read:user,user:email")
+                .containsEntry(github + "redirect-uri", "{baseUrl}/login/oauth2/code/{registrationId}")
+                .containsEntry("banco.auth.github.vinculos.113071563", "diana.prince")
+                .doesNotContainKey(github + "client-secret");
+    }
+
+    @Test
     @DisplayName("antifraude-service recibe sus reglas de riesgo desde la configuracion central")
     void reglasDeAntifraude() {
         assertThat(propiedades(entorno("antifraude-service")))

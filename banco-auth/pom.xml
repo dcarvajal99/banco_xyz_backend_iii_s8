@@ -16,7 +16,7 @@
     <artifactId>banco-auth</artifactId>
     <version>1.0.0</version>
     <name>banco-auth</name>
-    <description>Banco XYZ - servidor de autorizacion OAuth 2.0 / OIDC (Spring Authorization Server) con claves RSA rotables</description>
+    <description>Banco XYZ - servidor de autorizacion OAuth 2.0 / OIDC (Spring Authorization Server) con claves RSA rotables e inicio de sesion con GitHub</description>
 
     <properties>
         <java.version>17</java.version>
@@ -56,6 +56,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-oauth2-authorization-server</artifactId>
+        </dependency>
+        <!-- Cliente OAuth 2.0 de GitHub: "Ingresar con GitHub" en el login (identidad federada) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
