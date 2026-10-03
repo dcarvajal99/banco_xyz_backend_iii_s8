@@ -1,0 +1,11 @@
+{
+  "operacionId": 123,
+  "cuentaId": 101,
+  "tarjetaId": 12,
+  "tipo": "RETIRO",
+  "canal": "CAJERO",
+  "monto": 3000.00,
+  "saldoResultante": 9060.00,
+  "terminalId": "ATM-001",
+  "fechaHora": "2026-09-12T19:42:10"
+}

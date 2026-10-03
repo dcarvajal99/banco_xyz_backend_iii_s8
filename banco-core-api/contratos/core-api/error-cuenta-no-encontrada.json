@@ -1,0 +1,9 @@
+{
+  "type": "urn:bancoxyz:problema:cuenta-no-encontrada",
+  "title": "Cuenta no encontrada",
+  "status": 404,
+  "detail": "La cuenta no existe o no pertenece al usuario",
+  "instance": "/api/v1/cuentas/140",
+  "codigo": "CUENTA_NO_ENCONTRADA",
+  "correlacionId": "0f9e8d7c-6b5a-4938-8271-605f4e3d2c1b"
+}

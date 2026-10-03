@@ -1,0 +1,13 @@
+[
+  {
+    "cuentaId": 101,
+    "anio": 2024,
+    "cantidadMovimientos": 41,
+    "totalDepositos": 52000.00,
+    "totalCargos": 31800.00,
+    "saldoNeto": 20200.00,
+    "primeraFecha": "2024-01-03",
+    "ultimaFecha": "2024-12-28",
+    "movimientosConAnomalia": 6
+  }
+]

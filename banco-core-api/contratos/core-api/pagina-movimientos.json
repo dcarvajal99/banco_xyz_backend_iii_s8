@@ -1,0 +1,30 @@
+{
+  "contenido": [
+    {
+      "id": "L-7",
+      "cuentaId": 101,
+      "fecha": "2026-09-12",
+      "tipo": "retiro",
+      "monto": -3000.00,
+      "descripcion": "Retiro en cajero ATM-001",
+      "origen": "EN_LINEA",
+      "anomalia": false,
+      "observacion": null
+    },
+    {
+      "id": "C-812",
+      "cuentaId": 101,
+      "fecha": "2024-12-24",
+      "tipo": "deposito",
+      "monto": 3000.00,
+      "descripcion": "Ingreso navideño",
+      "origen": "CIERRE",
+      "anomalia": true,
+      "observacion": "Tipo normalizado desde la escritura con tilde del archivo legacy: depósito"
+    }
+  ],
+  "pagina": 0,
+  "tamano": 20,
+  "totalElementos": 43,
+  "totalPaginas": 3
+}

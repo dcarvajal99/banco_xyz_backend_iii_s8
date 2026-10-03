@@ -1,0 +1,10 @@
+{
+  "type": "urn:bancoxyz:problema:pin-incorrecto",
+  "title": "PIN incorrecto",
+  "status": 401,
+  "detail": "El PIN no corresponde a la tarjeta",
+  "instance": "/api/v1/autenticacion/tarjetas",
+  "codigo": "PIN_INCORRECTO",
+  "correlacionId": "2b7f0c1e-5a8d-4c1b-9a63-1f0e3c7d9b21",
+  "intentosRestantes": 2
+}

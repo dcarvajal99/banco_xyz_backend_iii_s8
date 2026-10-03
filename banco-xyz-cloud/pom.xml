@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Agregador, no parent: construye de una vez los dos servidores de la infraestructura Spring Cloud.
+        Cada modulo tiene como parent a spring-boot-starter-parent y se despliega por separado.
+    -->
+    <groupId>com.bancoxyz</groupId>
+    <artifactId>banco-xyz-cloud</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>banco-xyz-cloud</name>
+    <description>Banco XYZ - infraestructura Spring Cloud: Config Server y Eureka</description>
+
+    <modules>
+        <module>config-server</module>
+        <module>eureka-server</module>
+    </modules>
+</project>

@@ -1,0 +1,9 @@
+{
+  "type": "urn:bancoxyz:problema:saldo-insuficiente",
+  "title": "Saldo insuficiente",
+  "status": 422,
+  "detail": "El saldo disponible no alcanza para el monto solicitado",
+  "instance": "/api/v1/cuentas/101/retiros",
+  "codigo": "SALDO_INSUFICIENTE",
+  "correlacionId": "8c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"
+}

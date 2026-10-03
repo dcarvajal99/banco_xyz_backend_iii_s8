@@ -1,0 +1,14 @@
+{
+  "cuentaId": 101,
+  "clienteId": 6,
+  "titular": "Jane Smith",
+  "tipo": "ahorro",
+  "saldoDisponible": 12060.00,
+  "saldoCierre": 12060.00,
+  "tasaMensual": 0.00500,
+  "interesCierre": 60.00,
+  "anomalia": false,
+  "observacion": null,
+  "cierreJobExecutionId": 4,
+  "actualizadaEn": "2026-09-12T19:30:00"
+}

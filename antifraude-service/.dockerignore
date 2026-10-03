@@ -1,0 +1,7 @@
+# Lo que no entra al contexto de construccion de la imagen.
+target/
+.mvn/
+mvnw
+mvnw.cmd
+*.md
+.DS_Store

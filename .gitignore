@@ -1,0 +1,25 @@
+# Build
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE y sistema operativo
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+
+# Logs y salidas que se regeneran al ejecutar
+*.log
+*.pid
+
+# Evidencias de ejecucion: acompanan la entrega en el ZIP y se regeneran con banco-xyz-cloud/scripts/.
+banco-xyz-cloud/evidencias/
+
+# Copia local de la PKI de desarrollo (claves privadas) que los scripts toman del contenedor pki: NO se versiona.
+banco-xyz-cloud/certificados/
+
+# Secretos locales del docker-compose.yaml (la plantilla es .env.ejemplo)
+.env

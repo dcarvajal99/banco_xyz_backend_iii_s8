@@ -1,0 +1,19 @@
+{
+  "cierres": [
+    {
+      "conjunto": "INTERESES",
+      "jobExecutionId": 1,
+      "jobNombre": "migracionCompletaJob",
+      "estado": "COMPLETED",
+      "calidad": "DEGRADADA",
+      "finalizadoEn": "2026-09-12T19:05:41"
+    }
+  ],
+  "rechazados": [
+    {
+      "jobNombre": "calculoInteresesMensualesJob",
+      "clasificacion": "OMITIDO",
+      "cantidad": 664
+    }
+  ]
+}

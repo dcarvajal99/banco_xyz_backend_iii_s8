@@ -1,0 +1,8 @@
+# Contexto de construccion de las imagenes de banco-xyz-cloud: nada generado ni secreto.
+**/target/
+certificados/
+evidencias/
+.mvn/
+mvnw
+mvnw.cmd
+.DS_Store

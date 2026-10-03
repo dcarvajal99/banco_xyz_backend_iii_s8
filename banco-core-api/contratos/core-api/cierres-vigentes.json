@@ -1,0 +1,10 @@
+[
+  {
+    "conjunto": "INTERESES",
+    "jobExecutionId": 4,
+    "jobNombre": "migracionCompletaJob",
+    "estado": "COMPLETED",
+    "calidad": "DEGRADADA",
+    "finalizadoEn": "2026-09-12T19:05:41"
+  }
+]
