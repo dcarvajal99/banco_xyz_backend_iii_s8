@@ -140,7 +140,9 @@ banco-auth aplica ese esquema sin dejar de ser el servidor de autorización del 
 `read:user,user:email`, `redirect-uri` `{baseUrl}/login/oauth2/code/{registrationId}` y los vínculos. El `client-secret`
 **no** pasa por el Config Server: el compose lo entrega a banco-auth en
 `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_SECRET` desde `BANCO_GITHUB_CLIENT_SECRET` del `.env`. Con el
-`client-id` en `sin-configurar`, el login no muestra el botón. La aplicación OAuth se registra en GitHub con
+`client-id` en `sin-configurar`, el login no muestra el botón. Quien levanta el ecosistema puede vincular otra cuenta
+sin tocar el Config Server: `BANCO_GITHUB_VINCULOS=<id de GitHub>=<usuario>` en el `.env` (varios separados por coma;
+una entrada mal escrita se ignora). Una cuenta rechazada deja su id en el log (`no esta vinculado`). La aplicación OAuth se registra en GitHub con
 **Authorization callback URL** `https://localhost:8081/login/oauth2/code/github` (ver el README general, §5.4).
 
 ## Claims del token
@@ -260,6 +262,7 @@ Variables que el servicio recibe del `docker-compose.yaml` de la raíz (los valo
 | `BANCO_CANAL_AUTENTICACION_CLAVE` | Clave Basic del canal `AUTENTICACION` ante el core |
 | `BANCO_OAUTH_BANCA_WEB_SECRETO`, `BANCO_OAUTH_TRANSFERENCIAS_SECRETO`, `BANCO_OAUTH_OPERACION_SECRETO` | Secretos de los tres clientes OAuth |
 | `BANCO_GITHUB_CLIENT_ID`, `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_SECRET` | Aplicación OAuth registrada en GitHub (`.env`: `BANCO_GITHUB_CLIENT_ID` y `BANCO_GITHUB_CLIENT_SECRET`) |
+| `BANCO_GITHUB_VINCULOS` | Vínculos adicionales cuenta de GitHub → cliente del banco (`id=usuario,id=usuario`) |
 
 Depende (por salud) de `config-server`, `eureka-1` y `banco-core-api`, y publica `127.0.0.1:8081` y `127.0.0.1:9081`.
 
@@ -311,7 +314,7 @@ necesita al core. Las pruebas no necesitan ninguna infraestructura.
 ./mvnw verify
 ```
 
-33 pruebas. El informe de cobertura JaCoCo queda en `target/site/jacoco/index.html`.
+34 pruebas. El informe de cobertura JaCoCo queda en `target/site/jacoco/index.html`.
 
 ## Pruebas
 
@@ -323,7 +326,7 @@ Corren con el perfil `prueba` (sin Config Server ni Eureka) y simulan el core co
 | `FlujosOAuthTest` | 8 | Discovery OpenID (emisor, endpoints, `S256`); `authorization_code` + PKCE de punta a punta (access token RS256 con `kid` de la clave activa, verificado con el JWK Set, claims del usuario, `aud=banco-xyz`, scopes); PKCE obligatorio (sin `code_challenge` no hay código, sin `code_verifier` no se canjea); banca-web no puede pedir `core.cuentas.leer`; refresh token rotativo (el usado da `invalid_grant`); `client_credentials` sin datos de usuario ni refresh token; secreto incorrecto (401) y scope no permitido (400); al rotar, el token nuevo lleva el `kid` nuevo y `/oauth2/jwks` publica las dos claves sin parte privada |
 | `LoginContraElCoreTest` | 5 (2 + 3 casos) | Sin sesión, `/oauth2/authorize` lleva a `/login`; clave correcta: el core la valida y la sesión queda con el usuario y sus ids; el core rechaza con 401, 403 o 423 y el login muestra `credenciales`, `no-habilitado` o `bloqueado` |
 | `CircuitoDelCoreTest` | 5 | Core caído: el primer login reintenta una vez y a la tercera falla el circuito abre (el siguiente no llama al core); el formulario dice que el servicio no está disponible, no «clave incorrecta»; cinco claves incorrectas no abren el circuito; core sin instancias en Eureka (`IllegalStateException`) da `servicio` sin reintento; bulkhead lleno da `servicio` sin llamar al core ni contar como falla |
-| `LoginConGitHubTest` | 7 | El login ofrece "Ingresar con GitHub" y explica el rechazo de una cuenta sin vincular; `/oauth2/authorization/github` redirige a GitHub con `client_id`, scopes, `redirect_uri` y `state`; cuenta vinculada: el core confirma al cliente y la sesión queda con sus ids; sin vínculo: `cuenta_no_vinculada` sin llamar al core; vinculada a un usuario bloqueado: `usuario_bloqueado`; un `state` desconocido vuelve al login con error; con la sesión de GitHub el access token lleva los ids del banco, `origen=github` y `github_login`. GitHub se simula: las pruebas no salen a internet |
+| `LoginConGitHubTest` | 8 | El login ofrece "Ingresar con GitHub" y explica el rechazo de una cuenta sin vincular; `/oauth2/authorization/github` redirige a GitHub con `client_id`, scopes, `redirect_uri` y `state`; cuenta vinculada: el core confirma al cliente y la sesión queda con sus ids; un vínculo adicional de `BANCO_GITHUB_VINCULOS` funciona igual y una entrada mal escrita se ignora; sin vínculo: `cuenta_no_vinculada` sin llamar al core; vinculada a un usuario bloqueado: `usuario_bloqueado`; un `state` desconocido vuelve al login con error; con la sesión de GitHub el access token lleva los ids del banco, `origen=github` y `github_login`. GitHub se simula: las pruebas no salen a internet |
 | `OperacionProtegidaTest` | 5 | Sin token no se listan, rotan ni retiran claves (401) y la salud sigue abierta; un token válido de otro cliente da 403; `operacion-banco` lista, rota y retira; nadie puede forzar el estado de un circuito por el actuator (401 sin token, 403 con token); ningún otro cliente puede pedir `claves.administrar` |
 | `RotacionDeClavesTest` | 3 | Al rotar cambia la activa y el JWK Set publica las dos (el conjunto de firma trae las privadas); la anterior se retira sola al vencer su gracia; el retiro manual saca la anterior de inmediato y falla sobre la activa |
 

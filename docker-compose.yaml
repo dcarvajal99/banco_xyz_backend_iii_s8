@@ -183,6 +183,8 @@ services:
       # propiedad del cliente OAuth sin pasar por el Config Server. Sin .env, GitHub queda sin configurar (solo formulario).
       BANCO_GITHUB_CLIENT_ID: ${BANCO_GITHUB_CLIENT_ID:-sin-configurar}
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_CLIENT_SECRET: ${BANCO_GITHUB_CLIENT_SECRET:-sin-configurar}
+      # Vinculos adicionales cuenta de GitHub -> cliente del banco (id=usuario,id=usuario), para probar con otra cuenta.
+      BANCO_GITHUB_VINCULOS: ${BANCO_GITHUB_VINCULOS:-}
     depends_on:
       config-server: *listo
       eureka-1: *listo

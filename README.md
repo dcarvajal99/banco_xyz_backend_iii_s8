@@ -47,7 +47,7 @@ ni código compartido.
 | 6. Código, documentación y evidencia | Este repositorio, un README por proyecto y un script de evidencia por criterio | §6 y §7 |
 
 <!-- RESULTADOS -->
-Pruebas automatizadas: **168, 0 fallas** en los seis proyectos (§7). Evidencias de ejecución: **17 salidas de scripts con 238 verificaciones y 0 fallas** (§6), capturadas desde un estado limpio (`docker compose down -v`: base, Kafka y PKI nuevas), salvo el inicio de sesión real con GitHub, que se hace en el navegador con el ecosistema arriba. El ecosistema completo queda sano en 65 s; 48 transferencias tardan 12,17 s con un contenedor de antifraude y 5,10 s con tres (2,4×).
+Pruebas automatizadas: **169, 0 fallas** en los seis proyectos (§7). Evidencias de ejecución: **17 salidas de scripts con 238 verificaciones y 0 fallas** (§6), capturadas desde un estado limpio (`docker compose down -v`: base, Kafka y PKI nuevas), salvo el inicio de sesión real con GitHub, que se hace en el navegador con el ecosistema arriba. El ecosistema completo queda sano en 65 s; 48 transferencias tardan 12,17 s con un contenedor de antifraude y 5,10 s con tres (2,4×).
 <!-- /RESULTADOS -->
 
 ### 0.1 Respuesta a la retroalimentación
@@ -306,13 +306,23 @@ tokens es `https://banco-auth:8081`, el nombre del servicio en la red del compos
 
 ### 5.4 Ingresar con GitHub
 
-1. En GitHub: *Settings → Developer settings → OAuth Apps → New OAuth App*, con **Homepage URL**
-   `https://localhost:8081` y **Authorization callback URL** `https://localhost:8081/login/oauth2/code/github`. Generar
-   un *client secret*.
-2. Crear `.env` en la raíz (a partir de `.env.ejemplo`) con `BANCO_GITHUB_CLIENT_ID` y `BANCO_GITHUB_CLIENT_SECRET`, y
-   vincular la cuenta en `banco-xyz-cloud/configuracion/banco-auth.properties`
-   (`banco.auth.github.vinculos.<id numérico de GitHub>=<usuario del banco>`; el id se ve con `gh api user --jq .id`).
-3. `docker compose up -d --build --wait` y luego:
+El `.env` con la aplicación OAuth de GitHub **no está en el repositorio** (tiene su `client-secret`). Hay dos formas:
+
+- **Con el `.env` de la entrega** (viene en el ZIP de la actividad, junto a este README): ya trae la aplicación OAuth de
+  desarrollo `BancoAuth`, registrada con el callback `https://localhost:8081/login/oauth2/code/github`.
+- **Con una aplicación propia:** en GitHub, *Settings → Developer settings → OAuth Apps → New OAuth App*, con
+  **Homepage URL** `https://localhost:8081` y **Authorization callback URL**
+  `https://localhost:8081/login/oauth2/code/github`; generar un *client secret* y crear `.env` a partir de
+  `.env.ejemplo` con `BANCO_GITHUB_CLIENT_ID` y `BANCO_GITHUB_CLIENT_SECRET`.
+
+**Vincular la cuenta de GitHub con la que se va a entrar.** Solo entran cuentas vinculadas a un cliente del banco. En el
+`.env`, `BANCO_GITHUB_VINCULOS=<id numérico de GitHub>=<usuario del banco>` (varios separados por coma), por ejemplo
+`BANCO_GITHUB_VINCULOS=12345678=steve.rogers`. El id se ve en `https://api.github.com/users/<login>` (campo `id`) o en
+el log de banco-auth cuando rechaza la cuenta (`docker compose logs banco-auth | grep "no esta vinculado"`). Después de
+cambiar el `.env`: `docker compose up -d banco-auth`. Los vínculos del banco (el de `dcarvajal99`) viven en el Config
+Server, en `banco-xyz-cloud/configuracion/banco-auth.properties`.
+
+Con el ecosistema arriba (`docker compose up -d --build --wait`):
 
 ```bash
 banco-xyz-cloud/scripts/oauth2_github.sh                   # registro, botón, redirección a GitHub y vinculación
@@ -320,10 +330,11 @@ banco-xyz-cloud/scripts/oauth2_github.sh iniciar           # imprime la URL para
 banco-xyz-cloud/scripts/oauth2_github.sh canjear '<url>'   # la URL de vuelta (http://127.0.0.1:8099/callback?code=...)
 ```
 
-En el navegador: abrir la URL, aceptar el certificado de desarrollo de `https://localhost:8081` (o importar la CA del
-banco), elegir **Ingresar con GitHub**, iniciar sesión en GitHub y autorizar la aplicación. El navegador termina en
-`http://127.0.0.1:8099/callback?code=...` (no hay aplicación escuchando ahí): esa URL es la que se pasa a `canjear`.
-Sin `.env`, GitHub queda sin configurar y el login ofrece solo usuario y clave.
+En el navegador: abrir la URL que imprime `iniciar`, aceptar el certificado de desarrollo de `https://localhost:8081`
+(*Configuración avanzada → Continuar a localhost*; o importar la CA del banco), elegir **Ingresar con GitHub**, iniciar
+sesión en GitHub y autorizar la aplicación. El navegador termina en `http://127.0.0.1:8099/callback?code=...` con
+"conexión rechazada" (no hay aplicación escuchando ahí): esa URL es la que se pasa a `canjear`, antes de 5 minutos. Sin
+`.env`, GitHub queda sin configurar y el login ofrece solo usuario y clave.
 
 ### 5.5 Credenciales de desarrollo
 
@@ -382,12 +393,12 @@ banco-xyz-cloud/scripts/probar_todo.sh     # ./mvnw verify en cada proyecto por 
 |---|---|---|---|
 | banco-xyz-cloud / config-server | 11 | 80,0 % | `ConfiguracionCentralTest`: políticas por entorno y compartidas; registro de GitHub sin secreto |
 | banco-xyz-cloud / eureka-server | 2 | 33,3 % | `ReplicacionEntrePeersTest` con el transporte RestClient |
-| banco-core-api | 65 | 95,8 % | `CanalesDeLaSemana7Test` con token `client_credentials` + certificado e identificación para GitHub; `LectorDeEventosTest`; moneda no soportada |
-| banco-auth | 33 | 93,3 % | `FlujosOAuthTest`, `LoginContraElCoreTest`, `LoginConGitHubTest`, `OperacionProtegidaTest`, bulkhead en `CircuitoDelCoreTest` |
-| transferencias-service | 22 | 92,3 % | Token de servicio hacia el core, scopes por operación, bulkhead y actuator de solo lectura; `LectorDeEventosTest` |
-| antifraude-service | 15 | 86,4 % | `LectorDeEventosTest` (v1 → v2, versión futura a la DLT) |
-| notificaciones-service | 20 | 93,0 % | `LectorDeEventosTest`; scope `notificaciones.leer` |
-| **Total** | **168, 0 fallas** | | |
+| banco-core-api | 65 | 96,1 % | `CanalesDeLaSemana7Test` con token `client_credentials` + certificado e identificación para GitHub; `LectorDeEventosTest`; moneda no soportada |
+| banco-auth | 34 | 93,0 % | `FlujosOAuthTest`, `LoginContraElCoreTest`, `LoginConGitHubTest`, `OperacionProtegidaTest`, bulkhead en `CircuitoDelCoreTest` |
+| transferencias-service | 22 | 93,0 % | Token de servicio hacia el core, scopes por operación, bulkhead y actuator de solo lectura; `LectorDeEventosTest` |
+| antifraude-service | 15 | 89,1 % | `LectorDeEventosTest` (v1 → v2, versión futura a la DLT) |
+| notificaciones-service | 20 | 93,6 % | `LectorDeEventosTest`; scope `notificaciones.leer` |
+| **Total** | **169, 0 fallas** | | |
 <!-- /PRUEBAS -->
 
 ## 8. Limitaciones conocidas

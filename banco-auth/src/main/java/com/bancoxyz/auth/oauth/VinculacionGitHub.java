@@ -26,7 +26,8 @@ import org.springframework.stereotype.Component;
  *
  * <ol>
  *   <li>Lee el usuario de GitHub ({@code /user}, con el access token que entrego GitHub).</li>
- *   <li>Busca su id numerico en los vinculos del Config Server. Sin vinculo: {@code cuenta_no_vinculada}.</li>
+ *   <li>Busca su id numerico en los vinculos del Config Server (o en los adicionales de {@code BANCO_GITHUB_VINCULOS}).
+ *       Sin vinculo: {@code cuenta_no_vinculada}; el log muestra el id para poder vincularlo.</li>
  *   <li>El core confirma que ese cliente existe, esta activo y sin bloqueo, y entrega sus ids (canal AUTENTICACION,
  *       con Resilience4j). Los tokens que emite banco-auth llevan esos ids, igual que con el formulario.</li>
  * </ol>
@@ -63,7 +64,7 @@ public class VinculacionGitHub implements OAuth2UserService<OAuth2UserRequest, O
         OAuth2User cuenta = github.loadUser(solicitud);
         long id = ((Number) cuenta.getAttributes().get("id")).longValue();
         String login = String.valueOf(cuenta.getAttributes().get("login"));
-        String usuario = propiedades.vinculos().get(String.valueOf(id));
+        String usuario = propiedades.usuarioVinculado(id).orElse(null);
         if (usuario == null) {
             log.warn("GitHub {} (id {}) no esta vinculado a un cliente del banco", login, id);
             throw rechazo(NO_VINCULADA, "La cuenta de GitHub " + login + " no esta vinculada a un cliente del banco");

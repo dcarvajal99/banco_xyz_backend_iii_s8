@@ -134,6 +134,21 @@ class LoginConGitHubTest extends PruebaOAuth {
     }
 
     @Test
+    @DisplayName("Vinculo adicional de BANCO_GITHUB_VINCULOS (id=usuario): esa cuenta entra como ese cliente; una entrada mal escrita se ignora")
+    void vinculoAdicional() {
+        core.expect(requestTo(CORE + "/steve.rogers")).andRespond(withSuccess(
+                "{\"usuarioId\":7,\"clienteId\":7,\"usuario\":\"steve.rogers\",\"nombre\":\"Steve Rogers\",\"rol\":\"CLIENTE\"}",
+                MediaType.APPLICATION_JSON));
+
+        UsuarioGitHub usuario = iniciarConGitHub(9919L, "otra-cuenta");
+
+        core.verify();
+        assertThat(usuario.getName()).isEqualTo("steve.rogers");
+        assertThat(usuario.githubLogin()).isEqualTo("otra-cuenta");
+        assertThat(propiedades.adicionales()).containsExactly(Map.entry("9919", "steve.rogers"));
+    }
+
+    @Test
     @DisplayName("Cuenta de GitHub sin vincular: rechazo cuenta_no_vinculada, sin consultar al core")
     void cuentaNoVinculada() {
         core.expect(never(), requestTo(org.hamcrest.Matchers.startsWith(CORE)));
